@@ -6,13 +6,38 @@ username="username_"
 password="password_"
 location="location_"
 group="group_"
+limit=limit_
+size="size_"
+sizeCore=sizeCore_
 
 #######################################################################################################
+let total=(limit/sizeCore)-1
 echo | sudo add-apt-repository ppa:micahflee/ppa
 echo Y | sudo apt install sshpass
 curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 az extension add -n ml -y
 az login --service-principal --username ${loginString[0]} --password ${loginString[1]} --tenant ${loginString[2]};
+
+while [ 1 ]
+do
+    az ml compute delete -n check -g $group -w ws_$location -y
+    az ml compute create -n check -g $group -w ws_$location --size $size --type AmlCompute --tier low_priority --min-instances 1 --max-instances 1 --admin-username $username --admin-password $password -p true
+    state=$(az ml compute list -g $group -w ws_$location --query '[0].provisioning_state' -o tsv)
+    echo $state
+    if [ "$state" = "Succeeded" ]
+    then
+        for (( i=1; i<=$total; i++ ))
+        do
+            count=$[$RANDOM % 8 + 3]
+            name=$(head /dev/urandom | tr -dc a-z | head -c$count)
+            tmux new-session -d -s $i
+            tmux send -t $i "az ml compute create -n $name -g $group -w ws_$location --size $size --type AmlCompute --tier low_priority --min-instances 1 --max-instances 1 --admin-username $username --admin-password $password -p true" ENTER
+            echo "$i - $name"
+        done
+        break
+    fi
+    sleep 10m
+done
 
 while [ 1 ]
 do
@@ -39,4 +64,3 @@ do
     done
     sleep 60
 done
-
